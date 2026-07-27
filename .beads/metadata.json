@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "debian_11_stig_baseline",
+  "project_id": "846645fb-7864-49bc-b6d1-47d9988f7b60"
+}
