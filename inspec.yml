@@ -14,4 +14,6 @@ supports:
 depends:
   - name: Canonical_Ubuntu_20-04_LTS_STIG
     git: https://github.com/mitre/canonical-ubuntu-20.04-lts-stig-baseline.git
-    ref: eec1d85773b9036fe9d6695d2757036db5e04305
+    # Track main until the upstream cuts a tagged release that includes the
+    # debian entry in its supports list; then pin to that tag.
+    branch: main
