@@ -1,0 +1,89 @@
+---
+platforms:
+  - name: debian-11
+
+driver:
+  name: proxy
+  host: <%= ENV.fetch("KITCHEN_HOST") %>
+  username: <%= ENV.fetch("LXD_VM_USERNAME", "debian") %>
+  ssh_key: <%= ENV.fetch("KITCHEN_SSH_KEY") %>
+
+provisioner:
+  name: ansible_playbook
+  hosts: all
+  require_chef_for_busser: false
+  require_ruby_for_busser: false
+  # Do NOT let kitchen-ansible install Ansible via its distro installers; we
+  # provision a pinned ansible-core in a venv ourselves in pre_converge (see
+  # below for the bullseye Python constraint) and point Kitchen at it.
+  require_ansible_repo: false
+  require_ansible_omnibus: false
+  require_ansible_source: false
+  require_pip: false
+  require_pip3: false
+  ansible_binary_path: /opt/ansible-venv/bin
+  ansible_connection: local
+  ansible_verbose: true
+  roles_path: spec/ansible/roles
+  galaxy_ignore_certs: true
+  requirements_path: spec/ansible/roles/requirements.yml
+  requirements_collection_path: spec/ansible/roles/requirements.yml
+  ansible_extra_flags: <%= ENV['ANSIBLE_EXTRA_FLAGS'] %>
+
+suites:
+  - name: vanilla
+    provisioner:
+      playbook: spec/ansible/roles/ansible-role-debian-vanilla.yml
+    driver:
+      tags:
+        Name: Vanilla-<%= ENV['USER'] %>
+        CreatedBy: test-kitchen
+
+  - name: hardened
+    provisioner:
+      playbook: spec/ansible/roles/ansible-role-debian-hardened.yml
+    driver:
+      tags:
+        Name: Hardened-<%= ENV['USER'] %>
+        CreatedBy: test-kitchen
+
+lifecycle:
+  pre_converge:
+    - remote: |
+        echo "+++ Refreshing and updating APT packages +++"
+        sudo apt-get update || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -y upgrade || true
+        echo ""
+        echo "+++ Installing needed packages +++"
+        # Base tooling plus python3-venv/pip for the Ansible controller venv.
+        # Debian 11 (bullseye) ships Python 3.9 as /usr/bin/python3; unlike the
+        # SLES profile there is no vendor module dance — everything here is in
+        # the default bullseye repos.
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bc dnsutils vim git wget gcc curl libffi-dev libssl-dev python3-venv python3-pip python3-apt || true
+        echo ""
+        echo "+++ Installing a pinned ansible-core in a Python 3 virtualenv +++"
+        # Build the Ansible controller in a dedicated venv: deterministic binary
+        # path for kitchen-ansible and no PEP-668 externally-managed conflicts.
+        # bullseye's Python is 3.9, and ansible-core 2.15 is the last series
+        # whose controller supports 3.9 — hence the pin. If the hardening role
+        # chosen on card debian-11-stig-baseline-cfz.6 needs newer ansible-core,
+        # revisit this block (e.g. python3.11 via bullseye-backports).
+        sudo python3 -m venv /opt/ansible-venv
+        sudo /opt/ansible-venv/bin/pip install --upgrade pip
+        sudo /opt/ansible-venv/bin/pip install "ansible-core>=2.15,<2.16"
+        # kitchen-ansible runs ansible-galaxy as a bare command (PATH lookup),
+        # not via ansible_binary_path, so expose the venv binaries on PATH.
+        sudo ln -sf /opt/ansible-venv/bin/ansible /opt/ansible-venv/bin/ansible-playbook /opt/ansible-venv/bin/ansible-galaxy /opt/ansible-venv/bin/ansible-doc /opt/ansible-venv/bin/ansible-config /usr/local/bin/
+        echo ""
+        echo "+++ Keeping the kitchen sudo user usable after the hardening phase +++"
+        sudo chage -d $(( $( date +%s ) / 86400 )) <%= ENV.fetch("LXD_VM_USERNAME", "debian") %> || true
+        echo ""
+        echo "+++ add cinc-auditor for local shell +++"
+        curl -L https://omnitruck.cinc.sh/install.sh | sudo bash -s -- -P cinc-auditor
+
+transport:
+  name: ssh
+  username: <%= ENV.fetch("LXD_VM_USERNAME", "debian") %>
+  ssh_key: <%= ENV.fetch("KITCHEN_SSH_KEY") %>
+  # https://github.com/neillturner/kitchen-ansible/issues/295
+  max_ssh_sessions: 2
