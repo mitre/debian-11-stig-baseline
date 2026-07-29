@@ -50,6 +50,12 @@ suites:
 lifecycle:
   pre_converge:
     - remote: |
+        echo "+++ Registering the hostname in /etc/hosts +++"
+        # The genericcloud image's hostname resolves nowhere, so every sudo
+        # stalls ~20s in name resolution before giving up. Register it first
+        # so the rest of this script (and the converge) runs at full speed.
+        grep -q "$(hostname)" /etc/hosts || echo "127.0.1.1 $(hostname)" | sudo tee -a /etc/hosts
+        echo ""
         echo "+++ Refreshing and updating APT packages +++"
         sudo apt-get update || true
         sudo DEBIAN_FRONTEND=noninteractive apt-get -y upgrade || true
@@ -59,7 +65,15 @@ lifecycle:
         # Debian 11 (bullseye) ships Python 3.9 as /usr/bin/python3; unlike the
         # SLES profile there is no vendor module dance — everything here is in
         # the default bullseye repos.
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bc dnsutils vim git wget gcc curl libffi-dev libssl-dev python3-venv python3-pip python3-apt || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bc dnsutils vim git wget gcc curl libffi-dev libssl-dev python3-venv python3-pip python3-apt locales || true
+        echo ""
+        echo "+++ Generating the en_US.UTF-8 locale +++"
+        # The CI runner exports LC_ALL=en_US.UTF-8 and openssh forwards it into
+        # every session (SendEnv/AcceptEnv LC_*), but the genericcloud image
+        # ships no generated locales — which ansible-core treats as fatal
+        # ("could not initialize the preferred locale"). Generate it.
+        sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+        sudo locale-gen
         echo ""
         echo "+++ Installing a pinned ansible-core in a Python 3 virtualenv +++"
         # Build the Ansible controller in a dedicated venv: deterministic binary
