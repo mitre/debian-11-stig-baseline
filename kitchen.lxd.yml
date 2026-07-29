@@ -87,3 +87,9 @@ transport:
   ssh_key: <%= ENV.fetch("KITCHEN_SSH_KEY") %>
   # https://github.com/neillturner/kitchen-ansible/issues/295
   max_ssh_sessions: 2
+  # The genericcloud VM needs 1-3 minutes after launch before sshd listens
+  # (cloud-init probes for datasources it will never find, then generates the
+  # SSH host keys). The default budget of 5 retries x 1s gives up long before
+  # that, so allow up to 5 minutes.
+  connection_retries: 60
+  connection_retry_sleep: 5

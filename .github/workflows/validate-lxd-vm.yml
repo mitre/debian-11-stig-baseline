@@ -101,7 +101,12 @@ jobs:
           virt-customize --no-network -a disk.qcow2 \
             --run-command "useradd -m -s /bin/bash -G users $U || true" \
             --run-command "printf '%s ALL=(ALL) NOPASSWD:ALL\n' '$U' > /etc/sudoers.d/99-kitchen && chmod 0440 /etc/sudoers.d/99-kitchen" \
-            --run-command "systemctl enable ssh.service || true"
+            --run-command "systemctl enable ssh.service || true" \
+            --run-command "ssh-keygen -A"
+          # ssh-keygen -A: genericcloud images ship without SSH host keys and
+          # rely on cloud-init to create them at first boot; with no datasource
+          # on the LXD bridge that is the slowest (and least certain) part of
+          # boot. Baking the keys in guarantees sshd can start immediately.
           # Give the user a random (unused) password so its shadow field isn't "!"
           # (locked). SSH stays key-only, but hardening roles commonly refuse to
           # manage an account they see as locked (the SUSE15-CIS role does; the
@@ -152,15 +157,28 @@ jobs:
           [ -n "$ipv4" ] || { echo "No VM IPv4 found"; lxc info "$NAME"; exit 1; }
           echo "KITCHEN_HOST=$ipv4" >> "$GITHUB_ENV"
 
-      - name: VM boot diagnostics
-        continue-on-error: true
+      - name: Wait for SSH
         run: |
+          set -euo pipefail
           NAME="${{ matrix.suite }}-${{ env.PLATFORM }}"
-          # Give the guest a moment to settle, then dump the serial console so we
-          # can see boot / user-provisioning state if SSH later fails.
-          sleep 20
+          # The VM has an IP well before sshd listens (boot + cloud-init +
+          # host-key setup). Gate on port 22 actually accepting connections so
+          # Kitchen starts against a ready target, and fail here with
+          # diagnostics rather than deep inside a kitchen retry loop.
+          # (lxc console --show-log is container-only, so no serial log on VMs.)
+          for i in $(seq 1 60); do
+            if nc -z -w 2 "$KITCHEN_HOST" 22; then
+              echo "SSH is up after ~$((i * 5))s"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::SSH never came up on $KITCHEN_HOST:22"
           echo "=== lxc info ==="; lxc info "$NAME" || true
-          echo "=== serial console log (tail) ==="; lxc console "$NAME" --show-log 2>&1 | tail -50 || true
+          echo "=== verbose SSH attempt ==="
+          ssh -vvv -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
+            -i "$KITCHEN_SSH_KEY" "$LXD_VM_USERNAME@$KITCHEN_HOST" true 2>&1 | tail -30 || true
+          exit 1
 
       - name: Run kitchen test
         run: bundle exec kitchen test --destroy=always ${{ matrix.suite }}-${{ env.PLATFORM }} || true
