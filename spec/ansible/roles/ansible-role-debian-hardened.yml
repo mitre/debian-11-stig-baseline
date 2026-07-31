@@ -27,6 +27,19 @@
     # missing GRUB password as a finding, which is honest for this target.
     debian11cis_set_boot_pass: false
     debian11cis_bootloader_password_hash: "changethispassword"
+    # CIS 1.4.3 (auth required for single-user mode) wants the grub user
+    # (root) to have a shadow password — but the STIG (SV-238329) requires
+    # root LOCKED, and cloud images ship it locked. The role's prelim assert
+    # fails hard on that state unless set_grub_user_pass is true, and the only
+    # task that would actually write the password requires BOTH
+    # set_grub_user_pass AND rule_1_4_3 — so this combination satisfies the
+    # prelim while guaranteeing root's shadow entry is never touched: root
+    # stays locked per STIG, CIS 1.4.3 goes unremediated by choice. The hash
+    # is a valid-format throwaway ("kitchen-ci-throwaway-grub") that is never
+    # applied anywhere.
+    debian11cis_set_grub_user_pass: true
+    debian11cis_rule_1_4_3: false
+    debian11cis_grub_user_passwd: "$6$kitchenci$mxhqPHL8XjUMMvFZN1b3iM.c5xOIqH6a5cU107/D/iFZe7qvRjielcgMGDNswmG2S5dMWHp5fAlSR4ryrdSyP1"
     # Level 1 only for the first hardened baseline; enable level 2 once the
     # level-1 run is stable in CI.
     debian11cis_level_2: false
