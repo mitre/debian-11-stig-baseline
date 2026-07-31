@@ -6,11 +6,11 @@ on:
     branches:
       - main
 
-# Scans public Debian 11 (bullseye) images from Docker Hub via kitchen-dokken.
-# Both suites currently default to the same public image: Debian has no Iron
-# Bank-style hardened base image, so the hardened suite's image source is an
-# open decision (card debian-11-stig-baseline-cfz.6) and is ENV-overridable
-# via HARDENED_CONTAINER_IMAGE until it lands.
+# Scans the public Debian 11 (bullseye) image from Docker Hub via
+# kitchen-dokken. Vanilla only: Debian has no Iron Bank-style hardened base
+# image, so the hardened container suite was dropped (decision on card
+# debian-11-stig-baseline-cfz.6). Hardened scanning happens in the LXD VM
+# workflow, where the DEBIAN11-CIS role converges the target first.
 
 jobs:
   validate:
@@ -24,14 +24,11 @@ jobs:
       PLATFORM: "debian-11"
       DEPLOYMENT: "container"
       VANILLA_CONTAINER_IMAGE: "docker.io/library/debian:11"
-      HARDENED_CONTAINER_IMAGE: "docker.io/library/debian:11"
     strategy:
       matrix:
         include:
           - suite: vanilla
             hardening: none
-          - suite: hardened
-            hardening: undecided  # pending card debian-11-stig-baseline-cfz.6
       fail-fast: false
     steps:
       - name: add needed packages
@@ -76,7 +73,7 @@ jobs:
         # local image, so pull explicitly here: it fails fast on a bad image
         # reference and keeps registry auth/rate-limit handling in the docker
         # CLI rather than kitchen-dokken's registry client.
-        run: docker pull "${{ matrix.suite == 'hardened' && env.HARDENED_CONTAINER_IMAGE || env.VANILLA_CONTAINER_IMAGE }}"
+        run: docker pull "${{ env.VANILLA_CONTAINER_IMAGE }}"
 
       - name: Run kitchen test
         continue-on-error: true

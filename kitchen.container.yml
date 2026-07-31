@@ -1,10 +1,10 @@
 ---
 # see: https://kitchen.ci/docs/drivers/dokken/
 #
-# vanilla: public Debian 11 (bullseye) image from Docker Hub. hardened: Debian
-# has no Iron Bank-style hardened base image; the image is ENV-overridable and
-# defaults to the public image until the hardened-suite source decision lands
-# (card debian-11-stig-baseline-cfz.6).
+# Vanilla only: public Debian 11 (bullseye) image from Docker Hub. Debian has
+# no Iron Bank-style hardened base image, so the hardened container suite was
+# dropped (card debian-11-stig-baseline-cfz.6); hardened scanning lives in the
+# LXD VM suite, which converges the DEBIAN11-CIS role first.
 
 provisioner:
   name: dummy
@@ -26,9 +26,3 @@ suites:
     verifier:
       input_files:
         - container.vanilla.inputs.yml
-  - name: hardened
-    driver:
-      image: <%= ENV['HARDENED_CONTAINER_IMAGE'] || "docker.io/library/debian:11" %>
-    verifier:
-      input_files:
-        - container.hardened.inputs.yml

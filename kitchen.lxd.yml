@@ -79,9 +79,10 @@ lifecycle:
         # Build the Ansible controller in a dedicated venv: deterministic binary
         # path for kitchen-ansible and no PEP-668 externally-managed conflicts.
         # bullseye's Python is 3.9, and ansible-core 2.15 is the last series
-        # whose controller supports 3.9 — hence the pin. If the hardening role
-        # chosen on card debian-11-stig-baseline-cfz.6 needs newer ansible-core,
-        # revisit this block (e.g. python3.11 via bullseye-backports).
+        # whose controller supports 3.9 — hence the pin. This is also why the
+        # hardened suite pins DEBIAN11-CIS to its v1 line (1.0.6, min ansible
+        # 2.15.1); the 2.0.x line needs ansible-core 2.16.1+ (see card
+        # debian-11-stig-baseline-cfz.6).
         sudo python3 -m venv /opt/ansible-venv
         sudo /opt/ansible-venv/bin/pip install --upgrade pip
         sudo /opt/ansible-venv/bin/pip install "ansible-core>=2.15,<2.16"
