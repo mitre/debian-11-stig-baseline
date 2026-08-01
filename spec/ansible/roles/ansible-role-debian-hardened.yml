@@ -47,3 +47,12 @@
     # the auditor in this pipeline.
     setup_audit: false
     run_audit: false
+    # Rule 5.3.4 rewrites NOPASSWD -> PASSWD across sudoers, which breaks the
+    # Kitchen user's passwordless sudo and kills the InSpec verify (sudo over
+    # a non-TTY SSH session cannot prompt). This CI VM is a bellwether, not a
+    # production system: suspending the rule carries no real security risk —
+    # the only cost is the scan being marginally less representative, and
+    # SV-274859 still reports the surviving NOPASSWD entry as a finding.
+    # (Note: 5.3.4 is tagged level-2 in the role but its `when` never checks
+    # the level toggle, so debian11cis_level_2: false does not gate it.)
+    debian11cis_rule_5_3_4: false
