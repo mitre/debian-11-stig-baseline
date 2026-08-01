@@ -27,7 +27,7 @@ Therefore, even though Debian can technically be configured to pass the *literal
 
 ### How this profile handles each FIPS-related check
 
-- **SV-238216, SV-238217, SV-238325, SV-255912** verify approved-algorithm *configuration* (SSH MACs/ciphers/kex lists, SHA512 password hashing). These are real, distinct security properties a Debian system does or does not have, and they pass or fail on their own merits. Each carries an informational result noting this limitation.
+- **SV-238216, SV-238217, SV-238325, SV-255912** verify approved-algorithm *configuration* (SSH MACs/ciphers/kex lists, SHA512 password hashing). These are real, distinct security properties a Debian system does or does not have, and they pass or fail on their own merits. They run exactly as upstream wrote them — this section is the note about their limitation.
 - **SV-238363** ("must implement NIST FIPS-validated cryptography") checks the `fips=1` kernel posture **and then fails unconditionally** with a message pointing here. This is intentional: on Ubuntu, `fips_enabled=1` implies the validated Pro stack; on Debian it does not, and passing the upstream check would misrepresent an uncertified platform as compliant. Expect a permanent CAT I finding on every Debian scan. Deployments operating under a hard FIPS 140 mandate need a documented waiver/risk acceptance for it — or a platform that ships validated modules.
 
 ### What to do if you have a documented waiver for the FIPS requirements

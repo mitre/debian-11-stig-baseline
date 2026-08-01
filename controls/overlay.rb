@@ -5,99 +5,13 @@
 # card (see its notes for the full control-status table and decision record).
 #
 # A control block inside include_controls REPLACES the upstream control's
-# checks (verified empirically — describes do not merge), so every override
-# that only *adds* to a control must faithfully reproduce the upstream check
-# logic from vendor/<sha>/controls/<id>.rb alongside the addition. Keep these
-# in sync when re-vendoring an updated upstream.
-#
-# FIPS-touching overrides carry an informational describe pointing to the
-# "FIPS 140 on Debian" section of the README: Debian ships no CMVP-validated
-# cryptographic modules, so these controls verify approved-algorithm
-# *configuration* only. SV-238363 is deliberately kept as a permanently
-# failing assertion so assessors always see that gap as a finding.
-FIPS_CAVEAT = 'verifies approved-algorithm configuration only — Debian ships no CMVP-validated crypto modules, so this cannot attest FIPS-validated cryptography (see README, "FIPS 140 on Debian")'.freeze
-
+# checks (verified empirically), so a control is only overlaid when its
+# behavior on Debian must actually differ; anything that would merely add
+# commentary runs pure upstream, with the nuance documented in the README
+# (see "FIPS 140 on Debian" for the FIPS-family controls SV-238216,
+# SV-238217, SV-238325, and SV-255912, which verify approved-algorithm
+# configuration and run unmodified here).
 include_controls 'Canonical_Ubuntu_20-04_LTS_STIG' do
-  # SV-238216: upstream check logic reproduced verbatim; adds the Debian FIPS
-  # caveat describe.
-  control 'SV-238216' do
-    only_if('Control not applicable - SSH is not installed within containerized Ubuntu', impact: 0.0) {
-      !%w[docker podman kubepods lxc].include?(virtualization.system) || file('/etc/ssh/sshd_config').exist?
-    }
-
-    approved_macs = input('approved_openssh_server_conf')['macs']
-
-    macs_cmd = command("/usr/sbin/sshd -T 2>/dev/null | awk '$1==\"macs\"{print $2}'")
-    actual_macs = macs_cmd.stdout.strip
-
-    describe 'OpenSSH server MACs' do
-      it 'matches the approved list in exact order' do
-        expect(actual_macs).to eq(approved_macs), "OpenSSH server MACs:\n\t#{actual_macs}\ndoes not match the expected value:\n\t#{approved_macs}"
-      end
-    end
-
-    describe 'FIPS limitation on Debian (informational)' do
-      it FIPS_CAVEAT do
-        expect(true).to eq true
-      end
-    end
-  end
-
-  # SV-238217: upstream check logic reproduced verbatim; adds the Debian FIPS
-  # caveat describe on the branch where the check actually runs.
-  control 'SV-238217' do
-    if input('disable_fips')
-      impact 0.0
-      describe 'FIPS testing has been disabled' do
-        skip 'This control has been set to Not Applicable, FIPS validation has been disabled with the `disable_fips` input'
-      end
-    elsif %w[docker podman kubepods lxc].include?(virtualization.system)
-      describe 'FIPS validation in a container must be reviewed manually' do
-        skip 'FIPS validation in a container must be reviewed manually'
-      end
-    else
-      approved = input('approved_ciphers')
-      ciphers = inspec.sshd_active_config.params['ciphers']
-      ciphers = ciphers.first.split(',').map(&:strip) unless ciphers.nil?
-
-      describe 'SSH ciphers' do
-        it 'should contain only approved FIPS ciphers' do
-          unapproved_ciphers = ciphers.nil? ? [] : (ciphers - approved)
-          missing_approved_ciphers = ciphers.nil? ? approved : (approved - ciphers)
-
-          expect(ciphers).to_not be_nil, 'Ciphers directive missing from sshd_config'
-          expect(unapproved_ciphers).to eq([]), "Non-approved ciphers present (#{unapproved_ciphers.length}): #{unapproved_ciphers.join(', ')}"
-          expect(missing_approved_ciphers).to eq([]), "Approved ciphers missing (#{missing_approved_ciphers.length}): #{missing_approved_ciphers.join(', ')}"
-        end
-      end
-
-      describe 'FIPS limitation on Debian (informational)' do
-        it FIPS_CAVEAT do
-          expect(true).to eq true
-        end
-      end
-    end
-  end
-
-  # SV-238325: upstream check logic reproduced verbatim; adds the Debian FIPS
-  # caveat describe.
-  control 'SV-238325' do
-    weak_pw_hash_users = inspec.shadow.where { password !~ /^[*!]{1,2}.*$|^\$6\$.*$|^$/ }.users
-
-    describe 'All stored passwords' do
-      it 'should only be hashed with the SHA512 algorithm' do
-        message = "Users without SHA512 hashes:\n\t- #{weak_pw_hash_users.join("\n\t- ")}"
-        expect(weak_pw_hash_users).to be_empty, message
-      end
-    end
-
-    describe 'FIPS limitation on Debian (informational)' do
-      it FIPS_CAVEAT do
-        expect(true).to eq true
-      end
-    end
-  end
-
   # SV-238363: the requirement is NIST FIPS-*validated* cryptography
   # (SRG-OS-000396 / CCI-002450 / SC-13). On Ubuntu, fips_enabled=1 implies
   # the Ubuntu Pro validated module stack; on Debian the same flag is
@@ -120,38 +34,6 @@ include_controls 'Canonical_Ubuntu_20-04_LTS_STIG' do
     describe 'NIST FIPS-validated cryptographic modules' do
       it 'are available and in use on this platform' do
         expect(false).to eq(true), 'Debian provides no CMVP/NIST-validated cryptographic modules. A fips=1 kernel and approved-algorithm configuration establish a FIPS-capable posture at best; they do not constitute the FIPS-validated cryptography this requirement mandates (see README, "FIPS 140 on Debian"). This is a permanent finding on Debian — deployments operating under a FIPS mandate need a documented waiver/risk acceptance or a platform with validated modules.'
-      end
-    end
-  end
-
-  # SV-255912: upstream check logic reproduced verbatim; adds the Debian FIPS
-  # caveat describe.
-  control 'SV-255912' do
-    only_if('This requirement is Not Applicable in the container without open-ssh installed', impact: 0.0) {
-      !%w[docker podman kubepods lxc].include?(virtualization.system) || package('openssh-server').installed?
-    }
-
-    expected_kex = input('expected_kex')
-
-    sshd_t_output = command('/usr/sbin/sshd -T 2>/dev/null').stdout
-    kex_line = sshd_t_output.lines.find { |l| l.start_with?('kexalgorithms ') }
-    actual_kex = kex_line.nil? ? [] : kex_line.split(/\s+/, 2)[1].to_s.strip.split(',')
-
-    describe 'Effective SSHD KexAlgorithms' do
-      subject { actual_kex }
-      it 'is set and exactly matches the required FIPS-validated algorithms in order' do
-        expect(subject).to eq(expected_kex), <<~MSG.chomp
-          Expected KexAlgorithms to be exactly (in order):
-            - #{expected_kex.join("\n  - ")}
-          Actual:
-            - #{actual_kex.join("\n  - ")}
-        MSG
-      end
-    end
-
-    describe 'FIPS limitation on Debian (informational)' do
-      it FIPS_CAVEAT do
-        expect(true).to eq true
       end
     end
   end
