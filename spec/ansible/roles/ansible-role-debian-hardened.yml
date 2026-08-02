@@ -16,6 +16,13 @@
   serial: 50
   become: yes
   vars:
+    # kitchen-ansible launches the play via `sudo -E -s`, which preserves
+    # HOME=/home/<user> into the root-run ansible process. The role's async
+    # aideinit task then writes its job-status file under one HOME while the
+    # poller resolves ~/.ansible_async under the other and can fail with
+    # "could not find job" (bit debian-12 deterministically; latent here).
+    # Pin the async dir to a fixed path so both sides agree.
+    ansible_async_dir: /var/tmp/.ansible_async
     # Apply CIS remediation without rebooting mid-Kitchen-run, keep the Kitchen
     # login user working, and avoid the most lockout-prone options for an
     # unattended CI VM. Variable names verified against the role's 1.0.6
