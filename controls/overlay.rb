@@ -25,10 +25,8 @@ include_controls 'Canonical_Ubuntu_20-04_LTS_STIG' do
       !%w[docker podman kubepods lxc].include?(virtualization.system)
     }
 
-    fips_config_file = input('fips_config_file')
-
-    describe command("grep -i 1 #{fips_config_file}") do
-      its('stdout') { should match('1') }
+    describe file(input('fips_config_file')) do
+      its('content') { should match(/1/) }
     end
 
     describe 'NIST FIPS-validated cryptographic modules' do
