@@ -1,11 +1,3 @@
-# Pass/fail gate for the LXD VM "vanilla" (unhardened Debian 11) scan.
-#
-# compliance.min is 0 while the overlay is being stood up — the upstream
-# Ubuntu 20.04 controls are not yet confirmed to execute on Debian (card
-# cfz.4) and Ubuntu-specific controls are not yet dispositioned (card cfz.5).
-# Raise this once the overlay runs end to end to lock in expected vanilla
-# compliance and catch regressions. error.total.max stays 0: a control that
-# errors is a bug in the control, never an acceptable result.
 compliance:
   min: 0
 error:

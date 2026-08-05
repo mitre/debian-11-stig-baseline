@@ -7,10 +7,8 @@ on:
       - main
 
 # Scans Debian 11 (bullseye) container images via kitchen-dokken. vanilla: the
-# public Docker Hub image. hardened: the Iron Bank Debian image (decision
-# record on card debian-11-stig-baseline-cfz.10, reversing the cfz.6 drop),
-# pulled with the org-level SAF_IRONBANK_* credentials shared with the Ubuntu
-# profiles.
+# public Docker Hub image. hardened: the Iron Bank Debian image, pulled with
+# the org-level SAF_IRONBANK_* credentials shared with the Ubuntu profiles.
 
 jobs:
   validate:

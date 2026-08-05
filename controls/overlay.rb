@@ -1,25 +1,6 @@
-# Debian 11 overlay of the Canonical Ubuntu 20.04 LTS STIG baseline.
-#
-# All controls from the upstream profile are included as-is except the spot
-# overrides below, which implement the dispositions ruled on the cfz.5 audit
-# card (see its notes for the full control-status table and decision record).
-#
-# A control block inside include_controls REPLACES the upstream control's
-# checks (verified empirically), so a control is only overlaid when its
-# behavior on Debian must actually differ; anything that would merely add
-# commentary runs pure upstream, with the nuance documented in the README
-# (see "FIPS 140 on Debian" for the FIPS-family controls SV-238216,
-# SV-238217, SV-238325, and SV-255912, which verify approved-algorithm
-# configuration and run unmodified here).
 include_controls 'Canonical_Ubuntu_20-04_LTS_STIG' do
-  # SV-238363: the requirement is NIST FIPS-*validated* cryptography
-  # (SRG-OS-000396 / CCI-002450 / SC-13). On Ubuntu, fips_enabled=1 implies
-  # the Ubuntu Pro validated module stack; on Debian the same flag is
-  # reachable with stock, uncertified builds, so the upstream proxy check
-  # would pass misleadingly. Ruling (cfz.5, 2026-07-30): keep the kernel
-  # check as posture evidence and ADD an assertion that always fails on
-  # Debian — a deliberate standing CAT I finding so this profile never
-  # presents an uncertified platform as FIPS-validated.
+  # SV-238363: Debian ships no FIPS-validated modules, so this keeps the
+  # kernel-flag evidence but always fails; see README, "FIPS 140 on Debian".
   control 'SV-238363' do
     only_if('This control is Not Applicable to containers', impact: 0.0) {
       !%w[docker podman kubepods lxc].include?(virtualization.system)
@@ -36,13 +17,8 @@ include_controls 'Canonical_Ubuntu_20-04_LTS_STIG' do
     end
   end
 
-  # SV-278950: the upstream control verifies Ubuntu 20.04's identity and
-  # support lifecycle (standard support -> Ubuntu Pro ESM). Rewritten for
-  # Debian 11's identity and published lifecycle: Debian LTS covers bullseye
-  # through 2026-08-31 (free, part of the regular archive); beyond that,
-  # Extended LTS (Freexian ELTS, commercial) runs through 2031-06-30 via its
-  # own apt repository — the Debian analog of the upstream's `pro status`
-  # subscription branch.
+  # SV-278950: rewritten for Debian 11's identity and published lifecycle —
+  # free Debian LTS to 2026-08-31, then Freexian Extended LTS to 2031-06-30.
   control 'SV-278950' do
     only_if('This control is Not Applicable to containers', impact: 0.0) {
       !%w[docker podman kubepods lxc].include?(virtualization.system)
@@ -65,8 +41,7 @@ include_controls 'Canonical_Ubuntu_20-04_LTS_STIG' do
         end
       end
     elsif now <= elts_eol
-      # Beyond free LTS; vendor support requires the commercial Freexian
-      # Extended LTS repository to be configured.
+      # Past free LTS: vendor support requires the commercial Freexian ELTS repo.
       elts_sources = command('grep -rsiE "deb\\.freexian\\.com/extended-lts|extended-lts" /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null')
 
       describe 'Debian 11 Extended LTS (Freexian) apt source' do
