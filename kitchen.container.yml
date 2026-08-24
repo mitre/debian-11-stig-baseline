@@ -1,10 +1,10 @@
 ---
 # see: https://kitchen.ci/docs/drivers/dokken/
 #
-# vanilla: public Debian 11 (bullseye) image from Docker Hub. hardened: Debian
-# has no Iron Bank-style hardened base image; the image is ENV-overridable and
-# defaults to the public image until the hardened-suite source decision lands
-# (card debian-11-stig-baseline-cfz.6).
+# vanilla: public Debian 11 (bullseye) image from Docker Hub. hardened: the
+# Iron Bank Debian image (registry1.dso.mil/ironbank/opensource/debian/debian),
+# set via HARDENED_CONTAINER_IMAGE in CI. The local default stays the public
+# image so kitchen runs work without Registry One credentials.
 
 provisioner:
   name: dummy

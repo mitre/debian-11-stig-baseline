@@ -1,16 +1,65 @@
 ---
-# Hardened Debian 11 suite — PLACEHOLDER, NOT YET HARDENED.
+# Hardened Debian 11 suite.
 #
-# The hardening role is an open decision (beads card
-# debian-11-stig-baseline-cfz.6): no DISA STIG remediation playbook exists for
-# Debian, so a CIS-style role will likely stand in, as SUSE15-CIS does for the
-# SLES profile. Until that lands, this playbook applies only the vanilla prep so
-# the hardened suite exercises the full pipeline (converge -> verify ->
-# thresholds) against a stock box. The hardened threshold stays at
-# compliance.min 0 partly for this reason — do not raise it while this
-# placeholder is in play.
+# No DISA STIG remediation playbook exists for Debian; ansible-lockdown ships
+# only the CIS benchmark role (DEBIAN11-CIS). CIS is not the STIG, but it is
+# the closest available automated hardening baseline for Debian 11, so we use
+# it to get the box into a hardened state. The InSpec profile here still
+# validates against the STIG — the CIS role just ensures the scan runs against
+# a hardened target rather than a stock image. (Same pattern as the SLES
+# profile's SUSE15-CIS hardened suite.)
 - hosts:
     - localhost
   roles:
     - roles/ansible-role-debian-vanilla
+    - roles/DEBIAN11-CIS
   serial: 50
+  become: yes
+  vars:
+    # kitchen-ansible launches the play via `sudo -E -s`, which preserves
+    # HOME=/home/<user> into the root-run ansible process. The role's async
+    # aideinit task then writes its job-status file under one HOME while the
+    # poller resolves ~/.ansible_async under the other and can fail with
+    # "could not find job" (bit debian-12 deterministically; latent here).
+    # Pin the async dir to a fixed path so both sides agree.
+    ansible_async_dir: /var/tmp/.ansible_async
+    # Apply CIS remediation without rebooting mid-Kitchen-run, keep the Kitchen
+    # login user working, and avoid the most lockout-prone options for an
+    # unattended CI VM. Variable names verified against the role's 1.0.6
+    # defaults (prefix debian11cis_). Tune as the hardened baseline matures.
+    skip_reboot: true
+    debian11cis_uses_root: false
+    # A grub password on an unattended CI VM risks wedging recovery paths and
+    # the placeholder hash has no value there; SV-238204 will report the
+    # missing GRUB password as a finding, which is honest for this target.
+    debian11cis_set_boot_pass: false
+    debian11cis_bootloader_password_hash: "changethispassword"
+    # CIS 1.4.3 (auth required for single-user mode) wants the grub user
+    # (root) to have a shadow password — but the STIG (SV-238329) requires
+    # root LOCKED, and cloud images ship it locked. The role's prelim assert
+    # fails hard on that state unless set_grub_user_pass is true, and the only
+    # task that would actually write the password requires BOTH
+    # set_grub_user_pass AND rule_1_4_3 — so this combination satisfies the
+    # prelim while guaranteeing root's shadow entry is never touched: root
+    # stays locked per STIG, CIS 1.4.3 goes unremediated by choice. The hash
+    # is a valid-format throwaway ("kitchen-ci-throwaway-grub") that is never
+    # applied anywhere.
+    debian11cis_set_grub_user_pass: true
+    debian11cis_rule_1_4_3: false
+    debian11cis_grub_user_passwd: "$6$kitchenci$mxhqPHL8XjUMMvFZN1b3iM.c5xOIqH6a5cU107/D/iFZe7qvRjielcgMGDNswmG2S5dMWHp5fAlSR4ryrdSyP1"
+    # Level 1 only for the first hardened baseline; enable level 2 once the
+    # level-1 run is stable in CI.
+    debian11cis_level_2: false
+    # The role's built-in goss audit is redundant here — the InSpec profile is
+    # the auditor in this pipeline.
+    setup_audit: false
+    run_audit: false
+    # Rule 5.3.4 rewrites NOPASSWD -> PASSWD across sudoers, which breaks the
+    # Kitchen user's passwordless sudo and kills the InSpec verify (sudo over
+    # a non-TTY SSH session cannot prompt). This CI VM is a bellwether, not a
+    # production system: suspending the rule carries no real security risk —
+    # the only cost is the scan being marginally less representative, and
+    # SV-274859 still reports the surviving NOPASSWD entry as a finding.
+    # (Note: 5.3.4 is tagged level-2 in the role but its `when` never checks
+    # the level toggle, so debian11cis_level_2: false does not gate it.)
+    debian11cis_rule_5_3_4: false

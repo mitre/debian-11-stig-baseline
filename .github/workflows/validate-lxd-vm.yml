@@ -101,11 +101,16 @@ jobs:
           virt-customize --no-network -a disk.qcow2 \
             --run-command "useradd -m -s /bin/bash -G users $U || true" \
             --run-command "printf '%s ALL=(ALL) NOPASSWD:ALL\n' '$U' > /etc/sudoers.d/99-kitchen && chmod 0440 /etc/sudoers.d/99-kitchen" \
-            --run-command "systemctl enable ssh.service || true"
+            --run-command "systemctl enable ssh.service || true" \
+            --run-command "ssh-keygen -A"
+          # ssh-keygen -A: genericcloud images ship without SSH host keys and
+          # rely on cloud-init to create them at first boot; with no datasource
+          # on the LXD bridge that is the slowest (and least certain) part of
+          # boot. Baking the keys in guarantees sshd can start immediately.
           # Give the user a random (unused) password so its shadow field isn't "!"
           # (locked). SSH stays key-only, but hardening roles commonly refuse to
           # manage an account they see as locked (the SUSE15-CIS role does; the
-          # Debian role chosen on card cfz.6 may too), so keep the account
+          # Debian role may too), so keep the account
           # visibly unlocked from the start.
           virt-customize --no-network -a disk.qcow2 \
             --ssh-inject "$U:file:$KITCHEN_SSH_PUB" \
@@ -152,18 +157,62 @@ jobs:
           [ -n "$ipv4" ] || { echo "No VM IPv4 found"; lxc info "$NAME"; exit 1; }
           echo "KITCHEN_HOST=$ipv4" >> "$GITHUB_ENV"
 
-      - name: VM boot diagnostics
-        continue-on-error: true
+      - name: Wait for SSH
         run: |
+          set -euo pipefail
           NAME="${{ matrix.suite }}-${{ env.PLATFORM }}"
-          # Give the guest a moment to settle, then dump the serial console so we
-          # can see boot / user-provisioning state if SSH later fails.
-          sleep 20
+          # The VM has an IP well before sshd listens (boot + cloud-init +
+          # host-key setup). Gate on port 22 actually accepting connections so
+          # Kitchen starts against a ready target, and fail here with
+          # diagnostics rather than deep inside a kitchen retry loop.
+          # (lxc console --show-log is container-only, so no serial log on VMs.)
+          for i in $(seq 1 60); do
+            if nc -z -w 2 "$KITCHEN_HOST" 22; then
+              echo "SSH is up after ~$((i * 5))s"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::SSH never came up on $KITCHEN_HOST:22"
           echo "=== lxc info ==="; lxc info "$NAME" || true
-          echo "=== serial console log (tail) ==="; lxc console "$NAME" --show-log 2>&1 | tail -50 || true
+          echo "=== verbose SSH attempt ==="
+          ssh -vvv -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
+            -i "$KITCHEN_SSH_KEY" "$LXD_VM_USERNAME@$KITCHEN_HOST" true 2>&1 | tail -30 || true
+          exit 1
 
       - name: Run kitchen test
         run: bundle exec kitchen test --destroy=always ${{ matrix.suite }}-${{ env.PLATFORM }} || true
+
+      - name: Kitchen diagnostics
+        # The kitchen step above swallows its exit code so the summary and
+        # threshold steps can fail meaningfully; this step preserves the
+        # evidence those steps can't see. Kitchen's file logs keep the full
+        # converge/verify error text even when the CI stdout stream loses it
+        # (e.g. the SSH channel dying mid-converge), and the LXD state shows
+        # whether the VM was still alive afterwards.
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "=== LXD state ==="
+          lxc list || true
+          lxc info "${{ matrix.suite }}-${{ env.PLATFORM }}" 2>/dev/null || echo "(instance already destroyed)"
+          echo "=== kitchen logs ==="
+          for f in .kitchen/logs/*.log; do
+            echo "--- $f (last 200 lines)"
+            tail -200 "$f" || true
+          done
+
+      - name: Upload kitchen logs
+        # The inline dump above is subject to GitHub's per-line log truncation
+        # (~64KB), which can hide everything after one oversized line; the
+        # artifact is byte-exact.
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
+        with:
+          name: kitchen-logs-${{ matrix.suite }}
+          path: .kitchen/logs/
+          if-no-files-found: ignore
 
       - name: Save results summary JSON
         continue-on-error: true
@@ -204,7 +253,7 @@ jobs:
       - name: Validate scan threshold
         uses: mitre/saf_action@a19f76ed3721c14aa8a1afb8eded117d8bf16a5d  # v1.9.0
         with:
-          command_string: "validate threshold -i spec/results/${{ env.PLATFORM }}_${{ matrix.suite }}.json -F ${{ matrix.suite }}.threshold.yml"
+          command_string: "validate threshold -i spec/results/${{ env.PLATFORM }}_${{ matrix.suite }}.json --templateFile ${{ matrix.suite }}.threshold.yml"
 
       - name: Cleanup SSH private key
         if: always()

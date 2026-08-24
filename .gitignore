@@ -38,3 +38,7 @@ cloud-init.yaml
 
 # Repo-local rubocop cache (see Rakefile)
 .rubocop-cache/
+
+# Beads issue tracker: local Dolt DB + refs/dolt/data on the remote.
+# Nothing under .beads needs to be tracked; keep it out of the diff.
+.beads/

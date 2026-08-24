@@ -6,11 +6,9 @@ on:
     branches:
       - main
 
-# Scans public Debian 11 (bullseye) images from Docker Hub via kitchen-dokken.
-# Both suites currently default to the same public image: Debian has no Iron
-# Bank-style hardened base image, so the hardened suite's image source is an
-# open decision (card debian-11-stig-baseline-cfz.6) and is ENV-overridable
-# via HARDENED_CONTAINER_IMAGE until it lands.
+# Scans Debian 11 (bullseye) container images via kitchen-dokken. vanilla: the
+# public Docker Hub image. hardened: the Iron Bank Debian image, pulled with
+# the org-level SAF_IRONBANK_* credentials shared with the Ubuntu profiles.
 
 jobs:
   validate:
@@ -24,14 +22,16 @@ jobs:
       PLATFORM: "debian-11"
       DEPLOYMENT: "container"
       VANILLA_CONTAINER_IMAGE: "docker.io/library/debian:11"
-      HARDENED_CONTAINER_IMAGE: "docker.io/library/debian:11"
+      # The Iron Bank Debian repo has no plain "11" tag; 11.7 is its newest
+      # bullseye tag.
+      HARDENED_CONTAINER_IMAGE: "registry1.dso.mil/ironbank/opensource/debian/debian:11.7"
     strategy:
       matrix:
         include:
           - suite: vanilla
             hardening: none
           - suite: hardened
-            hardening: undecided  # pending card debian-11-stig-baseline-cfz.6
+            hardening: ironbank
       fail-fast: false
     steps:
       - name: add needed packages
@@ -70,6 +70,17 @@ jobs:
 
       - name: Vendor the Profile
         run: bundle exec cinc-auditor vendor . --overwrite
+
+      - name: Log in to Registry One
+        # Same org-level Iron Bank pull credentials the Ubuntu profiles use;
+        # gated to the hardened suite so vanilla (Docker Hub) runs and
+        # secretless fork PRs are unaffected.
+        if: matrix.suite == 'hardened'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.SAF_IRONBANK_REGISTRY }}
+          username: ${{ secrets.SAF_IRONBANK_CLI_USERNAME }}
+          password: ${{ secrets.SAF_IRONBANK_CLI_TOKEN }}
 
       - name: Pre-pull the container image
         # kitchen.container.yml sets pull_platform_image: false and uses the
@@ -118,4 +129,4 @@ jobs:
       - name: Ensure the scan meets our ${{ matrix.suite }} results threshold
         uses: mitre/saf_action@a19f76ed3721c14aa8a1afb8eded117d8bf16a5d  # v1.9.0
         with:
-          command_string: "validate threshold -i spec/results/${{ env.PLATFORM }}_${{ matrix.suite }}.json -F container_${{ matrix.suite }}.threshold.yml"
+          command_string: "validate threshold -i spec/results/${{ env.PLATFORM }}_${{ matrix.suite }}.json --templateFile container_${{ matrix.suite }}.threshold.yml"
