@@ -20,12 +20,12 @@ jobs:
       LC_ALL: "en_US.UTF-8"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
       - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073  # v1.324.0
         with:
           ruby-version: "3.3"
 
@@ -69,7 +69,7 @@ jobs:
           sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
 
       - name: Upload archive for testing
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
           name: release-profile
           path: ${{ runner.temp }}/release/
@@ -81,7 +81,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: archive
     runs-on: ubuntu-latest
-    environment: release
+    environment: Release
     concurrency:
       group: publish-${{ needs.archive.outputs.tag }}
       cancel-in-progress: false
@@ -98,15 +98,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          protected=$(gh api "repos/$GH_REPO/environments/release" \
+          protected=$(gh api "repos/$GH_REPO/environments/Release" \
             --jq 'any(.protection_rules[]?; .type == "required_reviewers" and (.reviewers | length > 0))')
           if [ "$protected" != "true" ]; then
-            echo "::error::Configure required reviewers for the release environment before publishing."
+            echo "::error::Configure required reviewers for the Release environment before publishing."
             exit 1
           fi
 
       - name: Check out repository and tags
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -123,7 +123,7 @@ jobs:
           fi
 
       - name: Download checked archive
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
         with:
           name: release-profile
           path: ${{ runner.temp }}/release/
