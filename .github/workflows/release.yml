@@ -1,24 +1,17 @@
-name: Release the Profile
+name: Build and Release Profile
 
 on:
   pull_request:
-  workflow_dispatch:
-    inputs:
-      publish:
-        description: "Publish from the default branch using the version in inspec.yml"
-        type: boolean
-        default: false
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   archive:
-    name: Archive and Check
+    name: Build and Validate Archive
     runs-on: ubuntu-latest
     outputs:
       archive: ${{ steps.metadata.outputs.archive }}
@@ -38,18 +31,10 @@ jobs:
 
       - name: Check release version
         id: metadata
-        env:
-          PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           ruby -ryaml -e '
             version = YAML.load_file("inspec.yml").fetch("version").to_s
             abort "Release version must use X.Y.Z" unless version.match?(/\A\d+\.\d+\.\d+\z/)
-            if ENV.fetch("PUBLISH") == "true"
-              unless ENV.fetch("GITHUB_REF_TYPE") == "branch" && ENV.fetch("GITHUB_REF_NAME") == ENV.fetch("DEFAULT_BRANCH")
-                abort "Publish must run from the default branch"
-              end
-            end
             File.open(ENV.fetch("GITHUB_ENV"), "a") do |env|
               env.puts "ARCHIVE=debian-11-stig-baseline-#{version}.tar.gz"
             end
@@ -92,16 +77,34 @@ jobs:
           retention-days: 14
 
   release:
-    name: Publish Release
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    name: Publish Approved Release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: archive
     runs-on: ubuntu-latest
+    environment: release
+    concurrency:
+      group: publish-${{ needs.archive.outputs.tag }}
+      cancel-in-progress: false
     permissions:
       contents: write
+      actions: read
     env:
       ARCHIVE: ${{ needs.archive.outputs.archive }}
       RELEASE_TAG: ${{ needs.archive.outputs.tag }}
     steps:
+      - name: Require configured approval protection
+        # An environment without required reviewers would not pause this job.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          protected=$(gh api "repos/$GH_REPO/environments/release" \
+            --jq 'any(.protection_rules[]?; .type == "required_reviewers" and (.reviewers | length > 0))')
+          if [ "$protected" != "true" ]; then
+            echo "::error::Configure required reviewers for the release environment before publishing."
+            exit 1
+          fi
+
       - name: Check out repository and tags
         uses: actions/checkout@v4
         with:
