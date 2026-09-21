@@ -12,7 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  publish:
+  release:
+    name: Request Profile Release
     permissions:
       contents: write
       actions: read
