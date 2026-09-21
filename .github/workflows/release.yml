@@ -93,7 +93,7 @@ jobs:
       RELEASE_TAG: ${{ needs.archive.outputs.tag }}
     steps:
       - name: Require configured approval protection
-        # An environment without required reviewers would not pause this job.
+        # Fail if required reviewers are missing; otherwise GitHub would run without approval.
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
