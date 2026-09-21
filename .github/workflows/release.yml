@@ -1,19 +1,22 @@
-name: Build and Release Profile
+name: Request Profile Release
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      build-run-id:
+        description: Optional build run ID. Leave blank for the latest successful main push build.
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  profile:
-    # Allow publishing; the called workflow keeps the build job read-only.
+  publish:
     permissions:
       contents: write
-    uses: mitre/inspec-profile-workflows/.github/workflows/release.yml@45bd68c4ce71e04ded811a8ff9e6782f611611af
+      actions: read
+    uses: mitre/inspec-profile-workflows/.github/workflows/release.yml@df0ccf9fbac9c45c951aee4e33d5734894007950
     with:
-      publish: true
+      build-run-id: ${{ inputs.build-run-id }}
+      build-workflow: build.yml
