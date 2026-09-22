@@ -3,7 +3,7 @@ include_controls 'Canonical_Ubuntu_20-04_LTS_STIG' do
   # kernel-flag evidence but always fails; see README, "FIPS 140 on Debian".
   control 'SV-238363' do
     only_if('This control is Not Applicable to containers', impact: 0.0) {
-      !%w[docker podman kubepods lxc].include?(virtualization.system)
+      !virtualization.container_system?
     }
 
     describe file(input('fips_config_file')) do
@@ -21,7 +21,7 @@ include_controls 'Canonical_Ubuntu_20-04_LTS_STIG' do
   # free Debian LTS to 2026-08-31, then Freexian Extended LTS to 2031-06-30.
   control 'SV-278950' do
     only_if('This control is Not Applicable to containers', impact: 0.0) {
-      !%w[docker podman kubepods lxc].include?(virtualization.system)
+      !virtualization.container_system?
     }
 
     describe 'Debian release identity' do
