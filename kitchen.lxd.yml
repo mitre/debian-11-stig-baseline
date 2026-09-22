@@ -55,22 +55,32 @@ suites:
 lifecycle:
   pre_converge:
     - remote: |
+        set -eu
         echo "+++ Registering the hostname in /etc/hosts +++"
         # The genericcloud image's hostname resolves nowhere, so every sudo
         # stalls ~20s in name resolution before giving up. Register it first
         # so the rest of this script (and the converge) runs at full speed.
         grep -q "$(hostname)" /etc/hosts || echo "127.0.1.1 $(hostname)" | sudo tee -a /etc/hosts
         echo ""
+        echo "+++ Configuring the Debian 11 security snapshot +++"
+        # Bullseye security indexes still reference packages removed from the
+        # live mirror. Use the end-of-LTS snapshot for this disposable CI VM.
+        # Only its expiry check is disabled; APT still verifies signatures and
+        # package hashes. Leave the main and updates repositories unchanged.
+        for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+          [ -f "$source" ] || continue
+          sudo sed -i -E 's@^(deb(-src)?[[:space:]]+)https?://(security\.debian\.org|deb\.debian\.org)/debian-security/?[[:space:]]+bullseye-security[[:space:]]+@\1[check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260901T000000Z/ bullseye-security @' "$source"
+        done
         echo "+++ Refreshing and updating APT packages +++"
-        sudo apt-get update || true
-        sudo DEBIAN_FRONTEND=noninteractive apt-get -y upgrade || true
+        sudo apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 -y upgrade
         echo ""
         echo "+++ Installing needed packages +++"
         # Base tooling plus python3-venv/pip for the Ansible controller venv.
         # Debian 11 (bullseye) ships Python 3.9 as /usr/bin/python3; unlike the
-        # SLES profile there is no vendor module dance — everything here is in
-        # the default bullseye repos.
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bc dnsutils vim git wget gcc curl libffi-dev libssl-dev python3-venv python3-pip python3-apt locales || true
+        # SLES profile there is no vendor module dance — use the bullseye
+        # repositories configured above.
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y bc dnsutils vim git wget gcc curl libffi-dev libssl-dev python3-venv python3-pip python3-apt locales
         echo ""
         echo "+++ Generating the en_US.UTF-8 locale +++"
         # The CI runner exports LC_ALL=en_US.UTF-8 and openssh forwards it into
@@ -93,6 +103,8 @@ lifecycle:
         # kitchen-ansible runs ansible-galaxy as a bare command (PATH lookup),
         # not via ansible_binary_path, so expose the venv binaries on PATH.
         sudo ln -sf /opt/ansible-venv/bin/ansible /opt/ansible-venv/bin/ansible-playbook /opt/ansible-venv/bin/ansible-galaxy /opt/ansible-venv/bin/ansible-doc /opt/ansible-venv/bin/ansible-config /usr/local/bin/
+        ansible --version
+        ansible-galaxy --version
         echo ""
         echo "+++ Unlocking the kitchen user password +++"
         # The image bake sets a password so the account is not locked, but
@@ -104,7 +116,10 @@ lifecycle:
         sudo chage -d $(( $( date +%s ) / 86400 )) <%= ENV.fetch("LXD_VM_USERNAME", "debian") %> || true
         echo ""
         echo "+++ add cinc-auditor for local shell +++"
-        curl -L https://omnitruck.cinc.sh/install.sh | sudo bash -s -- -P cinc-auditor
+        installer=$(mktemp)
+        trap 'rm -f "$installer"' EXIT
+        curl -fL --retry 3 https://omnitruck.cinc.sh/install.sh -o "$installer"
+        sudo bash "$installer" -P cinc-auditor
 
 transport:
   name: ssh
