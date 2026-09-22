@@ -15,9 +15,6 @@ depends:
   - name: Canonical_Ubuntu_20-04_LTS_STIG
     git: https://github.com/mitre/canonical-ubuntu-20.04-lts-stig-baseline.git
     branch: main
-  - name: inspec-profile-resources
-    git: https://github.com/mitre/inspec-profile-resources.git
-    ref: dba0308406baa84b2b8171dd9e7c02287fbe2a4d
 
 inputs:
   # SV-238206: the upstream default embeds Ubuntu's cloud-image default user
