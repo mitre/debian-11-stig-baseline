@@ -14,7 +14,7 @@ supports:
 depends:
   - name: Canonical_Ubuntu_20-04_LTS_STIG
     git: https://github.com/mitre/canonical-ubuntu-20.04-lts-stig-baseline.git
-    branch: main
+    tag: v2.4.2
 
 inputs:
   # SV-238206: the upstream default embeds Ubuntu's cloud-image default user
