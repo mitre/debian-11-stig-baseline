@@ -4,7 +4,7 @@ maintainer: MITRE SAF Team
 copyright: MITRE
 license: Apache-2.0
 summary: "STIG-ready InSpec baseline for Debian 11 (bullseye), overlaying the DISA STIG for Canonical Ubuntu 20.04 LTS"
-version: 0.1.1
+version: 0.1.2
 inspec_version: ">= 4.0"
 
 supports:
@@ -14,7 +14,7 @@ supports:
 depends:
   - name: Canonical_Ubuntu_20-04_LTS_STIG
     git: https://github.com/mitre/canonical-ubuntu-20.04-lts-stig-baseline.git
-    branch: main
+    tag: v2.4.2
 
 inputs:
   # SV-238206: the upstream default embeds Ubuntu's cloud-image default user
