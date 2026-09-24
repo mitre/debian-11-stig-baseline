@@ -2,7 +2,7 @@
 
 This InSpec profile can help programs automate security compliance checks of `Debian 11 (bullseye)` systems against Department of Defense (DoD) STIG-style guidance.
 
-- Profile Version: `0.1.1`
+- Profile Version: `0.1.2`
 - Derived from: [Canonical Ubuntu 20.04 LTS STIG baseline](https://github.com/mitre/canonical-ubuntu-20.04-lts-stig-baseline) v2.4 (Canonical Ubuntu 20.04 LTS STIG)
 
 This profile uses the [InSpec](https://github.com/inspec/inspec) open-source compliance validation language to support automation of the required compliance, security and policy testing for Assessment and Authorization (A&A) and Authority to Operate (ATO) decisions and Continuous Authority to Operate (cATO) processes.
